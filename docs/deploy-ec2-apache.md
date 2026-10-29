@@ -195,6 +195,7 @@ security patches only.
 
 | Symptom | Likely cause | Fix |
 | --- | --- | --- |
+| `Address already in use: AH00072` on start | Something else owns port 80 (often a manually started Apache) | `sudo ss -tlnp 'sport = :80'`, then `sudo pkill -f apache2` and re-run |
 | `502 Proxy Error` | JVM not running | `systemctl status daybook`, `journalctl -u daybook -n 80` |
 | `503 Service Unavailable` | Apache module or vhost not enabled | `sudo a2enmod proxy proxy_http headers deflate && sudo systemctl reload apache2` |
 | `Connection to … refused` / timeout on boot | RDS security group missing the EC2 SG, or different VPC | Fix the inbound rule in Step 1 |

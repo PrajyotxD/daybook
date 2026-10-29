@@ -184,8 +184,21 @@ if [[ ${DISTRO} == "ubuntu" ]]; then
     a2dissite 000-default >/dev/null 2>&1 || true
     a2ensite daybook >/dev/null
     apache2ctl configtest || die "Apache configuration test failed — see the message above."
+
+    # A manually started Apache (or another server) holding :80 makes the restart
+    # fail with a bare "Address already in use". Name the culprit instead.
+    PORT80_PID="$(ss -tlnpH 'sport = :80' 2>/dev/null | sed -n 's/.*pid=\([0-9]*\).*/\1/p' | head -1)"
+    APACHE_PID="$(systemctl show -p MainPID --value apache2 2>/dev/null || echo 0)"
+    if [[ -n "${PORT80_PID}" && "${PORT80_PID}" != "0" && "${PORT80_PID}" != "${APACHE_PID}" ]]; then
+        warn "Port 80 is held by PID ${PORT80_PID} ($(ps -o comm= -p "${PORT80_PID}" 2>/dev/null || echo unknown))"
+        die "Stop that process (e.g. sudo pkill -f apache2) and re-run this script."
+    fi
+
     systemctl enable apache2 >/dev/null 2>&1 || true
-    systemctl restart apache2
+    systemctl restart apache2 || {
+        ss -tlnpH 'sport = :80'
+        die "Apache failed to start. Check: journalctl -xeu apache2.service"
+    }
 else
     httpd -t || die "Apache configuration test failed — see the message above."
     systemctl enable httpd >/dev/null 2>&1 || true
