@@ -137,7 +137,7 @@ cd frontend && node scripts/e2e.mjs   # browser E2E (needs both servers running)
 
 ```
 backend/
-  src/main/java/com/cloudblitz/entries/
+  src/main/java/com/cloudblitz/daybook/
     api/            controller, DTOs, problem-details handler
     config/         CORS, OpenAPI, demo seeder (dev only)
     domain/         Entry entity + enums
@@ -148,24 +148,51 @@ frontend/
   src/components/   sidebar, topbar, entry sheet, palette, chart, toasts
   src/pages/        overview, entries
   src/lib/          typed API client, formatting, shell context
+deploy/ec2/
+  setup.sh             one-shot install / redeploy on Ubuntu
+  daybook.service      systemd unit for the API
+  daybook.conf         Apache vhost (SPA + /api proxy)
+  daybook.env.example  credentials and JVM sizing
+docs/
+  deploy-ec2-apache.md  EC2 + Apache + RDS runbook
 infra/
-  ecs-task-definition.json   api + web containers, logs, health checks
+  ecs-task-definition.json   api + web containers (container alternative)
   README.md                  RDS, IAM, ECR, ALB, ECS walkthrough
-scripts/deploy.sh            build → push → register → roll out
+scripts/deploy.sh            container build → push → roll out
 docker-compose.yml           local production-shaped stack
 ```
 
 ## Deployment
 
-See [`infra/README.md`](infra/README.md) for the full AWS walkthrough. In short:
+### EC2 + Apache + RDS (primary path)
+
+The application runs as a systemd service behind Apache on a single **Ubuntu 22.04/24.04** EC2
+instance; PostgreSQL lives on RDS. Apache serves the built SPA from `/var/www/daybook` and proxies
+`/api` to the JVM on loopback, so there is one origin, no CORS, and no exposed application port.
 
 ```bash
-export AWS_REGION=ap-south-1 CLUSTER=cloudblitz-prod SERVICE=entries \
-       DB_HOST=cloudblitz-daybook.xxxx.rds.amazonaws.com \
-       CORS_ORIGINS=https://entries.example.com
-./scripts/deploy.sh
+cd ~/daybook
+sudo -E DB_HOST=<rds-endpoint> DB_NAME=daybook DB_USERNAME=daybook \
+     DB_PASSWORD='…' CORS_ALLOWED_ORIGINS=https://daybook.example.com \
+     DOMAIN=daybook.example.com \
+     ./deploy/ec2/setup.sh
 ```
 
-The ALB terminates TLS and forwards to nginx on port 80; nginx serves the SPA and proxies `/api`
-over loopback to the Spring Boot container, so the database credentials and the JVM port never
-leave the task.
+The script installs the JDK/Node/Apache, builds both halves, writes `/etc/daybook/daybook.env`
+(0600), installs `daybook.service` and the vhost, then verifies the API is healthy. Re-running it is
+the update path.
+
+Full walkthrough — security groups, creating the database role, TLS with certbot, operations and a
+troubleshooting table: **[`docs/deploy-ec2-apache.md`](docs/deploy-ec2-apache.md)**.
+
+| File | Purpose |
+| --- | --- |
+| `deploy/ec2/setup.sh` | One-shot install / redeploy |
+| `deploy/ec2/daybook.service` | systemd unit (JVM on 127.0.0.1:8080) |
+| `deploy/ec2/daybook.conf` | Apache vhost (SPA fallback + `/api` proxy) |
+| `deploy/ec2/daybook.env.example` | Credentials and JVM sizing template |
+
+### ECS Fargate (alternative)
+
+Container-based deployment is kept in [`infra/README.md`](infra/README.md): an ALB in front of a
+single task running nginx and the JVM side by side, deployed with `scripts/deploy.sh`.

@@ -1,0 +1,32 @@
+[Unit]
+Description=Daybook API (Spring Boot)
+Documentation=https://github.com/PrajyotxD/daybook
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=daybook
+Group=daybook
+WorkingDirectory=/opt/daybook
+
+# DB credentials and JVM flags live here, root:daybook, mode 0600.
+EnvironmentFile=/etc/daybook/daybook.env
+Environment=SPRING_PROFILES_ACTIVE=prod
+
+# sh -c so $JAVA_OPTS from the EnvironmentFile is expanded.
+ExecStart=/bin/sh -c 'exec /usr/bin/java $JAVA_OPTS -jar /opt/daybook/daybook-service.jar'
+
+Restart=always
+RestartSec=5
+SuccessExitStatus=143
+TimeoutStopSec=30
+
+LimitNOFILE=65536
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target
