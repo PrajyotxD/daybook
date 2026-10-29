@@ -110,15 +110,31 @@ Indexes cover `entry_date`, `created_at`, `status`, `category`, `lower(title)` a
 
 ## Configuration
 
+There is deliberately **no committed `.env`** — secrets stay out of git. Configuration lives in
+three places depending on how you run the app:
+
+| Context | Where the values come from |
+| --- | --- |
+| Local dev (default) | Nothing to configure. `application-dev.yml` uses in-memory H2; Vite proxies `/api` to `:8080`. |
+| `docker compose` | A local `.env` (`cp .env.example .env`). Compose reads it automatically. |
+| Ubuntu EC2 | `/etc/daybook/daybook.env` — created by `deploy/ec2/setup.sh`, mode `0600`, read by systemd. Template: `deploy/ec2/daybook.env.example`. |
+| Frontend overrides | `frontend/.env` (`cp frontend/.env.example frontend/.env`) — Vite reads only its own directory. |
+
+Spring Boot does **not** read `.env` files. On the EC2 host the values arrive as real environment
+variables through the systemd unit's `EnvironmentFile`.
+
 | Variable | Default | Used by |
 | --- | --- | --- |
 | `APP_PORT` | `8080` | API |
 | `SPRING_PROFILES_ACTIVE` | `dev` | API |
-| `DB_HOST` / `DB_PORT` / `DB_NAME` | `localhost` / `5432` / `entries` | API (prod) |
-| `DB_USERNAME` / `DB_PASSWORD` | `entries` | API (prod) |
+| `DB_URL` | built from the parts below | API (prod) — full override, e.g. with `?sslmode=require` |
+| `DB_HOST` / `DB_PORT` / `DB_NAME` | `localhost` / `5432` / `daybook` | API (prod) |
+| `DB_USERNAME` / `DB_PASSWORD` | `daybook` | API (prod) |
+| `DB_SSLMODE` | `prefer` | API (prod) — use `require` for RDS |
 | `DB_POOL_SIZE` | `10` | API (prod) |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:5173` | API |
 | `VITE_API_BASE_URL` | `/api` | Web build |
+| `VITE_PROXY_TARGET` | `http://localhost:8080` | Vite dev proxy only |
 
 ## Tests
 
