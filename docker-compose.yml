@@ -1,0 +1,47 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: daybook-db
+    environment:
+      POSTGRES_DB: ${DB_NAME:-entries}
+      POSTGRES_USER: ${DB_USERNAME:-entries}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-entries}
+    ports:
+      - "5432:5432"
+    volumes:
+      - daybook-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-entries} -d ${DB_NAME:-entries}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: ./backend
+    container_name: daybook-api
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-entries}
+      DB_USERNAME: ${DB_USERNAME:-entries}
+      DB_PASSWORD: ${DB_PASSWORD:-entries}
+      CORS_ALLOWED_ORIGINS: http://localhost:3000,http://localhost:5173
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ./frontend
+    container_name: daybook-web
+    ports:
+      - "3000:80"
+    depends_on:
+      - api
+
+volumes:
+  daybook-data:
